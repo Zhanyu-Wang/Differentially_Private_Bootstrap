@@ -1,0 +1,4 @@
+"method","CI coverage (mean): level=0.95","CI coverage2 (mean): level=0.95","CI width (mean): level=0.95","CI width (se): level=0.95","time"
+"clean_bootstrap",0.951,0,0.0167722469,1.13287e-05,16.53
+"deconvolveR",1,0,0.0607502034,7.20205e-05,20.27
+"NoisyVar",0.8905,0,0.0142518429,9.4955e-06,10.04
