@@ -110,7 +110,7 @@ for (penalty_c in c(0.01, 1)){
         true_param <- QuantileRegularized(X, Y, penalty=penalty_c)[2]
         print(true_param)
         ############################################################
-        # This experiment focuses on logistic
+        # This experiment focuses on quantile regression
         func_param <- function(formula, data, indices) {
           X <- cbind(1, data[indices, 1])
           Y <- data[indices, 2]
