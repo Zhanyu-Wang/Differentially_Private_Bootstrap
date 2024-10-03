@@ -91,19 +91,21 @@ QuantileRegularized = function(X, Y, penalty){
 
 
 ###################################
+use_dpboot <- TRUE
+alpha_mu <- 0.07
 
-confidence_levels <- c(0.9, 0.95)
+confidence_levels <- c(0.9)
 
-for (penalty_c in c(0.01, 1)){ 
+for (penalty_c in c(0.01, 1)){
   for (gdp_mu in c(1, 2, 5, 10)){
     for (B in c(20,50,100,200,500,1000)){
       for (N in c(1000, 3000, 10000, 30000, 100000)){
         print(c(N, penalty_c, gdp_mu, B))
         txt_name <- paste("results_quantile/deconvolution_", description_str, provide_PR_code_name, 
                           "_N=", N, "_mu=", gdp_mu, "_B=", B, "_c=", penalty_c, "_nSIM=", nSIM, ".csv", sep='')        
-        if (file.exists(txt_name)) {
-          next
-        }
+        # if (file.exists(txt_name)) {
+        #   next
+        # }
         X <- cbind(1, province_data$MRKINC)
         Y <- province_data$SHELCO
 
@@ -233,19 +235,12 @@ for (penalty_c in c(0.01, 1)){
         all_results <- method_stat
 
         ####################################
-        method_name <- 'deconvolveR'
+        method_name <- 'repro'
         start_time <- Sys.time()
-
+        
         # DP input (noisy results)
         noisy_boot_params <- clean_boot_params + sapply(seq_len(nSIM), function(x) rnorm(n = B, 0, sd_of_noise))
-        noisy_boot_params_scaled <- noisy_boot_params / sd_of_noise # from 0.45 to 0.55
-        support_min_scaled <- 0 / sd_of_noise 
-        support_max_scaled <- 1 / sd_of_noise 
-        bin_width <- (support_max_scaled - support_min_scaled)/bin_num
-        grid_seq <- seq(from = support_min_scaled, to = support_max_scaled, 
-                        by = bin_width)
-
-
+        
         method_result <- foreach(
           i = 1:nSIM, 
           .combine = 'cbind',
@@ -253,16 +248,70 @@ for (penalty_c in c(0.01, 1)){
                       'deconvolveR'),
           .options.snow=opts
         ) %dopar% {
-          set.seed(i)
-          func_deconvolveR_CI(noisy_boot_params_scaled[,i])
+          curr_dp_values <- noisy_boot_params[,i]
+          s1 <- mean(curr_dp_values)
+          s2 <- var(curr_dp_values)
+          # conf = 0.9, alpha/4=0.025
+          a1 <- qnorm(alpha_mu/2)
+          a2 <- qnorm(1-alpha_mu/2)
+          a3 <- (qchisq(0.1-alpha_mu, df=B-1) - (B-1)) / sqrt(B-1)
+          # a4 <- (qchisq(1-0.025, df=B-1) - (B-1)) / sqrt(B-1)
+          sigma_x_n_2_upper <- max(0, s2 / (1+a3/sqrt(B-1)) - sd_of_noise^2)
+          # sigma_x_n_2_lower <- max(0, s2 / (1+a4/sqrt(B-1)) - sd_of_noise^2)
+          c(s1 - a2 * sqrt(sigma_x_n_2_upper + (sd_of_noise^2 + sigma_x_n_2_upper)/B), s1 - a1 * sqrt(sigma_x_n_2_upper + (sd_of_noise^2 + sigma_x_n_2_upper)/B))
         }
-
-        method_result[3:(2+length(confidence_levels)),] <- 
-          method_result[3:(2+length(confidence_levels)),] * sd_of_noise
-        method_stat <- CI_coverage_width(method_result, method_name)
-        method_stat$time <- round(Sys.time() - start_time + bootstrap_step_time, 2)
+      #   print(method_result)
+        
+        CI_infos <- c()
+        for (i in c(1:length(confidence_levels))) {
+          coverage <- (method_result[2*i-1,] <= true_param) & (method_result[2*i,] >= true_param)
+          mean_coverage <- mean(coverage)
+          coverage2 <- (method_result[2*i-1,] <= 0) & (method_result[2*i,] >= 0)
+          mean_coverage2 <- mean(coverage2)
+          std_coverage <- round(sd(coverage) / sqrt(nSIM), digits = result_digits)
+          width <- (c(method_result[2*i,] - method_result[2*i-1,]))
+          mean_width <- round(mean(width), digits = result_digits)
+          std_width <- round(sd(width) / sqrt(nSIM), digits = result_digits)
+          CI_infos <- c(CI_infos, mean_coverage, mean_coverage2, mean_width, std_width)
+        }
+        method_stat <- data.frame(method_name, data.frame(matrix(CI_infos, nrow=1)))
+        method_stat$time <- round(Sys.time() - start_time, 2)
         all_results <- rbind(all_results, method_stat)
+        
+        ####################################
+        ####################################
+        if(use_dpboot) {
+          method_name <- 'deconvolveR'
+          start_time <- Sys.time()
 
+          # DP input (noisy results)
+          # noisy_boot_params <- clean_boot_params + sapply(seq_len(nSIM), function(x) rnorm(n = B, 0, sd_of_noise))
+          noisy_boot_params_scaled <- noisy_boot_params / sd_of_noise # from 0.45 to 0.55
+          support_min_scaled <- 0 / sd_of_noise 
+          support_max_scaled <- 1 / sd_of_noise 
+          bin_width <- (support_max_scaled - support_min_scaled)/bin_num
+          grid_seq <- seq(from = support_min_scaled, to = support_max_scaled, 
+                          by = bin_width)
+
+
+          method_result <- foreach(
+            i = 1:nSIM, 
+            .combine = 'cbind',
+            .packages=c('boot',
+                        'deconvolveR'),
+            .options.snow=opts
+          ) %dopar% {
+            set.seed(i)
+            func_deconvolveR_CI(noisy_boot_params_scaled[,i])
+          }
+
+          method_result[3:(2+length(confidence_levels)),] <- 
+            method_result[3:(2+length(confidence_levels)),] * sd_of_noise
+          method_stat <- CI_coverage_width(method_result, method_name)
+          method_stat$time <- round(Sys.time() - start_time + bootstrap_step_time, 2)
+          all_results <- rbind(all_results, method_stat)
+        }
+        
 
         ####################################
         ##### finish running experiment; print and save results

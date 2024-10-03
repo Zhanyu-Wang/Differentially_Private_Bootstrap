@@ -1,4 +1,0 @@
-"method","CI coverage (mean): level=0.9","CI coverage2 (mean): level=0.9","CI width (mean): level=0.9","CI width (se): level=0.9","CI coverage (mean): level=0.95","CI coverage2 (mean): level=0.95","CI width (mean): level=0.95","CI width (se): level=0.95","time"
-"clean_bootstrap",0.897,5e-04,0.0184960935,3.5928e-05,0.9375,0.0015,0.0217028669,4.34171e-05,15.22
-"deconvolveR",0.9215,5e-04,0.021186308,5.48964e-05,0.967,0.0015,0.026003043,6.96464e-05,19.17
-"DP-CI-ERM",0.8865,5e-04,0.0191327472,1.08e-05,0.943,0.0015,0.0227980745,1.2869e-05,2.75
